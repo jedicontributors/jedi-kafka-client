@@ -52,18 +52,17 @@ Consumers must return Response object.
 Unsuccess messages are checked with retry policies that are defined in configuration file.
 responseCode 0 stands for Success operation.
 
-# Initializing KafkaService
+# Initializing JediKafkaClient
 
-Clients must simply create a KafkaService instance.
+Clients must simply create a JediKafkaClient instance.
 
-KafkaService looks for a kafka-config.json file in classpath and creates producers and consumers.
+JediKafkaClient looks for a kafka-config.json file in classpath and creates producers and consumers.
 
-KafkaService kafkaService  = new KafkaService();
+JediKafkaClient jediKafkaClient = JediKafkaClient.getInstance();
 
 
 Alternatively different filename can be used.
-
-KafkaService kafkaService = new KafkaService("otherKafkaConfig.json");
+JediKafkaClient jediKafkaClient = JediKafkaClient.getInstance("otherKafkaConfig.json");
 
 # Consumer Registeration
 Consumer handler code ,which is a client code, must be registered for specific topic.
@@ -71,12 +70,12 @@ Theres is no need to do anything for producer.
 
 final String TOPIC = "test";
 
-//initializing KafkaService
-KafkaService kafkaService  = new KafkaService();
+//initializing JediKafkaClient
+JediKafkaClient jediKafkaClient = JediKafkaClient.getInstance();
 //Sample Consumer
 MessageConsumer consumer = new MessageConsumer();
 //registering consumer to related topic
-kafkaService.registerConsumer(TOPIC, consumer);
+jediKafkaClient.registerConsumer(TOPIC, consumer);
 
 # Retrying Messages
 Retry is automated.
