@@ -1,0 +1,11 @@
+{
+	"producers": {
+		"testProducer": {
+			"topic": "test-byteArr-producer",
+			"properties": {
+				"bootstrap.servers": "0.0.0.0:9092",
+				"value.serializer": "org.apache.kafka.common.serialization.ByteArraySerializer"
+			}
+		}
+	}
+}

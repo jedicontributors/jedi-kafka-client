@@ -1,0 +1,18 @@
+{
+	"producers": {
+		"testProducer": {
+			"topic": "test-topic",
+			"properties": {
+				"bootstrap.servers": " 0.0.0.0:9092 "
+			}
+		}
+	},
+	"consumers": {
+		 "testConsumer": {
+			"topic": "test-topic",
+			"properties": {
+				"bootstrap.servers": "0.0.0.0:9092"
+			}
+		}
+	}
+}

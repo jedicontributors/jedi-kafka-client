@@ -1,0 +1,32 @@
+{
+	"producers": {
+		"testObjectProducer": {
+			"topic": "test-object-topic",
+			"properties": {
+				"bootstrap.servers": "0.0.0.0:9092"
+			}
+		}
+	},
+	"consumers": {
+	 	"testConsumer": {
+			"topic": "test-topic",
+			"properties": {
+				"bootstrap.servers": "0.0.0.0:9092"
+			},
+			"maxRetryCount": 2,
+			"retryPolicys": {
+			    "retry10": {
+			     "retryTopic": "test-retry10",	
+			     "errorCode": "-1,-2,-3",
+			     "seconds": "10"
+			    }
+			}
+		 },
+		 "testObjectConsumer": {
+			"topic": "test-object-topic",
+			"properties": {
+				"bootstrap.servers": "0.0.0.0:9092"
+			}
+		}
+	}
+}

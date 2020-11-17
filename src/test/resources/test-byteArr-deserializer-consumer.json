@@ -1,0 +1,11 @@
+{
+	"consumers": {
+		"testConsumer": {
+			"topic": "test-byteArr-consumer",
+			"properties": {
+				"bootstrap.servers": "0.0.0.0:9092",
+				"value.deserializer": "org.apache.kafka.common.serialization.ByteArrayDeserializer"
+			}
+		}
+	}
+}
