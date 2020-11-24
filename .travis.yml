@@ -3,3 +3,5 @@ jdk:
   - openjdk8
 sudo: false
 script: "mvn clean install"
+notifications:
+  slack: jedicontributors:1iwMEyHygp3cJUsXL6AljEka
