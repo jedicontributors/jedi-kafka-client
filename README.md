@@ -112,30 +112,5 @@ errorCode field can be used for many errorcodes in csv format like  500,501,503,
 }
 
 
-# Handling Circular Dependancies in Spring
-If spring is used and if it is required for a consumer to produce new messages for an other topic during consumption, circular dependancy occurs on startup.
-
-KafkaService can not be autowired in consumer handler, because on startup kafkaService needs this consumer for registeration.
-Handler needs kafkaService for producing another message.
-
-There are more than 1 solution to this problem.
-An easy solution provided goes below.
-
-Bean declaration
-
-@Bean 
-  public JediKafkaClient jediKafkaClient(@Autowired MessageHandler messageHandler) {
-    JediKafkaClient jediKafkaClient = JediKafkaClient.getInstance();
-    jediKafkaClient.registerConsumer(" topic-1", messageHandler);
-    return jediKafkaClient;
-}
-
-On consumer side:
- 
-@Override
-  public Response onMessage(Message message) {
-        JediKafkaClient jediKafkaClient = JediKafkaClient.getInstance();
-        String message = "Message";
-        jediKafkaClient.sendAsync("topic-2", message);
 
 
