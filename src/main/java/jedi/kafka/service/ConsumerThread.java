@@ -300,24 +300,17 @@ public class ConsumerThread extends Thread {
     List<KafkaMessage<?>> kafkaMessages = new ArrayList<>();
     List<Object> messages = new ArrayList<>();
     try {
-      List<Future<?>> futureListMessages = new ArrayList<>();
       for(ConsumerRecord<?,?> record : records) {
-        Future<?> future = executorService.submit(() -> {
-          KafkaMessage<?> kafkaMessage = getKafkaMessage(record);
-          messages.add(kafkaMessage.getMessage());
-          if(isRetryable) {
-            kafkaMessages.add(kafkaMessage);
-          }
-        });
-        futureListMessages.add(future);
-      }
-      futureListMessages.forEach(future->{
+        KafkaMessage<?> kafkaMessage = getKafkaMessage(record);
         try {
-          future.get();
+          messages.add(kafkaMessage.getMessage());
         } catch (Exception e) {
-          log.error("Failed to process batch of records.",e);
+          e.printStackTrace();
         }
-      });
+        if(isRetryable) {
+          kafkaMessages.add(kafkaMessage);
+        }
+      }
       @SuppressWarnings("unchecked")
       Future<?> handlerFuture = executorService.submit(() -> {
         try {
