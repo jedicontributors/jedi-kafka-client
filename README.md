@@ -112,8 +112,8 @@ errorCode field can be used for many errorcodes in csv format like  500,501,503,
 }
 
 
-# Handling Circular Dependancies in Spring
-If spring is used and if it is required for a consumer to produce new messages for an other topic during consumption, circular dependancy occurs on startup.
+# Handling Circular Dependencies in Spring
+If spring is used and if it is required for a consumer to produce new messages for an other topic during consumption, circular dependency occurs on startup.
 
 KafkaService can not be autowired in consumer handler, because on startup kafkaService needs this consumer for registeration.
 Handler needs kafkaService for producing another message.
