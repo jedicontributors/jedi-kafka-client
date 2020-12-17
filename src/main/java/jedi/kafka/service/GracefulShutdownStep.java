@@ -28,18 +28,15 @@ public class GracefulShutdownStep extends Step {
       public void run() {
         log.info("Closing kafkaService components now..");
         shutdownAndAwaitTermination(kafkaService.producerThreadPool);
-        log.info("producer ExecutorService shutdown finished");
+        log.info("Producer ExecutorService shutdown finished");
         kafkaService.getTopicConsumerThreadMap().values().forEach(ConsumerThread::shutdown);
         try {
-          log.info("Sleping 15 seconds before closing consumers");
+          log.info("Waiting max 30 seconds for consumer tasks to finish");
           Thread.sleep(15000L);
-          
         } catch (InterruptedException e) {
           log.error("InterruptedException on sleeping",e);
           Thread.currentThread().interrupt();
         }finally {
-          log.info("Closing consumer executor services now..");
-          kafkaService.getTopicConsumerThreadMap().values().forEach(ctl -> shutdownAndAwaitTermination(ctl.getExecutorService()));
           log.info("Shutdown finished!");
         }
       }
@@ -47,7 +44,8 @@ public class GracefulShutdownStep extends Step {
     
   }
   
-  private void shutdownAndAwaitTermination(ExecutorService pool) {
+  public static void shutdownAndAwaitTermination(ExecutorService pool) {
+    log.info("Shutting down pool -> {}",pool.toString());
     pool.shutdown(); // Disable new tasks from being submitted
     try {
       // Wait a while for existing tasks to terminate

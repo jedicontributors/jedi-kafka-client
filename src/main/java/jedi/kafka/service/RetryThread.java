@@ -61,8 +61,12 @@ public class RetryThread extends ConsumerThread  {
     } catch (Exception e) {
       log.warn("Ignoring Exception for shutdown. RetyThread {}", e.getMessage());
     } finally {
-      log.info("Closing consumer topic {} for partitions {}", topic, consumer.assignment());
+      log.info("Closing consumer executor services now..");
+      GracefulShutdownStep.shutdownAndAwaitTermination(getExecutorService());
+      log.info("Shutdown of executor service finished for topic {} partition(s) {}",topic,consumer.assignment());
+      log.info("Closing consumer topic {} partition(s) {}", topic,consumer.assignment());
       consumer.close();
+      log.info("Closed consumer for retry topic {} ", topic);
     }
   }
   

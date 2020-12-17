@@ -107,8 +107,12 @@ public class ConsumerThread extends Thread {
     } catch(Exception ex){
         log.error("Exception in ConsumerThread ",ex);  
     } finally {
-      log.info("Closing consumer topic {} partitions {}", topic,kafkaConsumer.assignment());
+      log.info("Closing consumer executor services now..");
+      GracefulShutdownStep.shutdownAndAwaitTermination(executorService);
+      log.info("Shutdown of executor service finished for topic {} partition(s) {}",topic,kafkaConsumer.assignment());
+      log.info("Closing consumer topic {} partition(s) {}", topic,kafkaConsumer.assignment());
       kafkaConsumer.close();
+      log.info("Closed consumer with a partition for topic {} ", topic);
     }
   }
 
@@ -140,7 +144,9 @@ public class ConsumerThread extends Thread {
   
   protected void waitClientResponse(List<Future<?>> futureList) {
     preventRebalance();
-    futureList.forEach(this::waitClientResponse);
+    for(Future<?> future:futureList) {
+      waitClientResponse(future);
+    }
   }
 
   protected void resumeConsumer() {
@@ -216,6 +222,7 @@ public class ConsumerThread extends Thread {
   }
   
   protected void close() {
+    log.info("Closing consumer topic -> {}",consumerConfig.getTopic());
     kafkaConsumer.close();
   }
 
