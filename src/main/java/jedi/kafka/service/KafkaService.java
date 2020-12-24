@@ -56,7 +56,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class KafkaService {
 
-  protected ExecutorService producerThreadPool;
+  protected ExecutorService producerThreadPool = ThreadPoolUtil.newCachedLimitedThreadPool(PRODUCER_POOL);
   
   @Getter
   @Setter
@@ -90,7 +90,6 @@ public class KafkaService {
     ReadConfigurationStep readConfigurationService =
         new ReadConfigurationStep(this, preValidationStep);
     readConfigurationService.execute();
-    this.producerThreadPool = ThreadPoolUtil.newCachedLimitedThreadPool(PRODUCER_POOL);
   }
 
   /**
@@ -122,30 +121,32 @@ public class KafkaService {
         return consumerThread;
       });
     });
-
+    topicsStarted.add(topic);
     if (Objects.nonNull(consumerConfig.getRetryPolicys())
         && !consumerConfig.getRetryPolicys().isEmpty()) {
       consumerConfig.getRetryPolicys().entrySet().forEach(rpEntry -> {
         KafkaConsumerConfig retryConsumerConfig =
             topicKafkaConsumerConfigMap.get(rpEntry.getValue().getRetryTopic());
-        retryConsumerConfig.setMaxRetryCount(Objects.isNull(consumerConfig.getMaxRetryCount()) ? DEFAULT_MAX_RETRY_COUNT : consumerConfig.getMaxRetryCount());
-        int retryPartitionCount = Objects.isNull(retryConsumerConfig.getPartitionCount()) ? DEFAULT_PARTITION_COUNT : retryConsumerConfig.getPartitionCount().intValue();
-        Duration duration =  Duration.ofSeconds(rpEntry.getValue().getSeconds());
-        IntStream.range(0, retryPartitionCount).forEach(i -> {
-          String threadName = String.join(DASH,rpEntry.getValue().getRetryTopic() ,String.valueOf(i));
-          ConsumerThread retryThread = new RetryThread();
-          retryThread.initialize(this, retryThread, retryConsumerConfig, consumerHandler, duration, threadName, DEFAULT_MAX_PROCESS_TIME);
-          topicConsumerThreadMap.computeIfAbsent(threadName,
-              key -> {
-                retryThread.start();
-                return retryThread;
-              });
-        });
-        topicsStarted.add(retryConsumerConfig.getTopic());
+        if(!topicsStarted.contains(retryConsumerConfig.getTopic())) {
+          retryConsumerConfig.setMaxRetryCount(Objects.isNull(consumerConfig.getMaxRetryCount()) ? DEFAULT_MAX_RETRY_COUNT : consumerConfig.getMaxRetryCount());
+          int retryPartitionCount = Objects.isNull(retryConsumerConfig.getPartitionCount()) ? DEFAULT_PARTITION_COUNT : retryConsumerConfig.getPartitionCount().intValue();
+          Duration duration =  Duration.ofSeconds(rpEntry.getValue().getSeconds());
+          IntStream.range(0, retryPartitionCount).forEach(i -> {
+            String threadName = String.join(DASH,rpEntry.getValue().getRetryTopic() ,String.valueOf(i));
+            ConsumerThread retryThread = new RetryThread();
+            retryThread.initialize(this, retryThread, retryConsumerConfig, consumerHandler, duration, threadName, DEFAULT_MAX_PROCESS_TIME);
+            topicConsumerThreadMap.computeIfAbsent(threadName,
+                key -> {
+                  retryThread.start();
+                  return retryThread;
+                });
+          });
+          topicsStarted.add(retryConsumerConfig.getTopic());
+        }
       });
 
     }
-    topicsStarted.add(topic);
+    
 //    waitPartitionAssignment();
   }
   
@@ -314,6 +315,16 @@ public class KafkaService {
       }
     }
     executorService.shutdown();
+  }
+  
+  protected void close(long timeout) {
+    log.info("Closing producer executor service now..");
+    GracefulShutdownStep.shutdownAndAwaitTermination(producerThreadPool);
+    topicKafkaProducerConfigMap.values().forEach(producerConfig->{
+      log.info("Flushing final transactions for producer topic {}",producerConfig.getTopic());
+      getProducerByTopic(producerConfig.getTopic()).flush();
+      getProducerByTopic(producerConfig.getTopic()).close(Duration.ofMillis(timeout));
+    });
   }
   
 }

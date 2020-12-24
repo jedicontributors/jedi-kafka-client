@@ -15,6 +15,8 @@ public class KafkaConstants {
   
   public static final Integer RETRY_INITIAL_VALUE = Integer.valueOf(0);
   
+  public static final int DEFAULT_MAX_THREADS = 8;
+  
   public static final String KAFKA_PROPERTIES_FILE = "/kafka-config.json";
   
   public static final String CONTEXT_SEPERATOR = "/";

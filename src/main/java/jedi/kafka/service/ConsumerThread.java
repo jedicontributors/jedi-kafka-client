@@ -1,7 +1,6 @@
 package jedi.kafka.service;
 
 import static jedi.kafka.model.KafkaConstants.BLANK_DELIMITER;
-import static jedi.kafka.model.KafkaConstants.EXECUTION_TIME_BUFFER;
 import static jedi.kafka.model.KafkaConstants.FAST_POLL_TIME;
 import static jedi.kafka.model.KafkaConstants.NEXT_RETRY_TIMESTAMP;
 import static jedi.kafka.model.KafkaConstants.RETRY_COUNTER;
@@ -23,13 +22,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.SerializationUtils;
@@ -39,7 +38,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 
 import jedi.kafka.model.KafkaMessage;
@@ -58,9 +56,9 @@ public class ConsumerThread extends Thread {
 
 
   protected final AtomicBoolean consumerPaused = new AtomicBoolean(false);
-  protected final AtomicLong lastPolltime = new AtomicLong();
-
+  protected long lastPollTime = 0;
   protected Collection<TopicPartition> assignedPartitions = new HashSet<>();
+  protected CountDownLatch countDownLatch;
   
   private long maxProcessTime;
   private KafkaService kafkaService;
@@ -77,14 +75,13 @@ public class ConsumerThread extends Thread {
   @Override
   public void run() {
     String topic = consumerConfig.getTopic();
-    ConsumerRecords<?,?> records = null;
     try {
       kafkaConsumer.subscribe(Collections.singleton(topic));
       log.info("Topic {} subscription completed",topic);
+      ConsumerRecords<?,?> records = null;
       if(handler.isBulkConsumer()) {
         while (!isShutDownInProgress) {
-          records = kafkaConsumer.poll(duration);
-          lastPolltime.set(System.currentTimeMillis());
+          records = poll(duration);
           if(!records.isEmpty()) {
             consumeBulk(records);
             resumeConsumer();
@@ -93,8 +90,7 @@ public class ConsumerThread extends Thread {
         }
       }else {
         while (!isShutDownInProgress) {
-          records = kafkaConsumer.poll(duration);
-          lastPolltime.set(System.currentTimeMillis());
+          records = poll(duration);
           if(!records.isEmpty()) {
             consume(records);
             resumeConsumer();
@@ -102,20 +98,27 @@ public class ConsumerThread extends Thread {
           }
         }
       }
-    }catch (WakeupException e) {
-      log.warn("Ignoring WakeupException");
     } catch(Exception ex){
         log.error("Exception in ConsumerThread ",ex);  
     } finally {
-      log.info("Closing consumer executor services now..");
-      GracefulShutdownStep.shutdownAndAwaitTermination(executorService);
-      log.info("Shutdown of executor service finished for topic {} partition(s) {}",topic,kafkaConsumer.assignment());
-      log.info("Closing consumer topic {} partition(s) {}", topic,kafkaConsumer.assignment());
+      String partitions = kafkaConsumer.assignment().toString();
+      log.info("Closing consumer topic {} partition(s) {}", topic,partitions);
       kafkaConsumer.close();
-      log.info("Closed consumer with a partition for topic {} ", topic);
+      log.info("Closed consumer for topic {} partition(s) {}", topic,partitions);
+      log.info("Closing consumer executor services for topic {} partitions(s) {}",topic,partitions);
+      GracefulShutdownStep.shutdownAndAwaitTermination(executorService);
+      log.info("Closed consumer executor services for topic {} partition(s) {}",topic,partitions);
+      countDownLatch.countDown();
+      log.info("Shutdown complete for topic {} partition(s) {}",topic,partitions);
     }
   }
-
+  
+  protected ConsumerRecords<?,?> poll(Duration duration) {
+    ConsumerRecords<?,?> records = kafkaConsumer.poll(duration);
+    resetLastPollTime();
+    return records;
+  }
+  
   @SuppressWarnings("unchecked")
   protected Future<?> handleRecord(ConsumerRecord<?,?> record) {
     return executorService.submit(() -> {
@@ -216,8 +219,9 @@ public class ConsumerThread extends Thread {
     }
   }
   
-  protected void shutdown() {
+  protected void shutdown(CountDownLatch countDownLatch) {
     log.info("Shutdown request recieved for consumer -> {}",this.getName());
+    this.countDownLatch = countDownLatch;
     this.isShutDownInProgress=true;
   }
   
@@ -263,13 +267,17 @@ public class ConsumerThread extends Thread {
   }
   
   protected void preventRebalance() {
-    if(System.currentTimeMillis()-lastPolltime.get() + EXECUTION_TIME_BUFFER < maxProcessTime) {
+    if(System.currentTimeMillis()-lastPollTime<maxProcessTime/2) {
       return;
     }
-    log.warn("Messsage processing takes too long.");
+    log.warn("Messsages processing takes too long.");
     pauseConsumer(null,null);
     kafkaConsumer.poll(FAST_POLL_TIME);
-    lastPolltime.set(System.currentTimeMillis());
+    resetLastPollTime();
+  }
+  
+  protected void resetLastPollTime() {
+    this.lastPollTime = System.currentTimeMillis();
   }
   
   private void consume(ConsumerRecords<?,?> records) {
