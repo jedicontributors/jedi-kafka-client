@@ -137,8 +137,7 @@ public class ConstructionStep extends Step {
         maxRetryDuration = maxRetryDuration+DEFAULT_MAX_PROCESS_TIME;
       }
       newRetryConsumer.getProperties().put(MAX_POLL_INTERVAL_MS,String.valueOf(maxRetryDuration));
-      newRetryConsumer.getProperties().put(REQUEST_TIMEOUT_MS,
-          String.valueOf(retryPolicy.getSeconds() * SECOND_TO_MILISECOND_COEFFICIENT));
+      newRetryConsumer.getProperties().put(REQUEST_TIMEOUT_MS,String.valueOf(maxRetryDuration));
       newRetryConsumer.getProperties().put(GROUP_ID, String.join(DASH,retryPolicy.getRetryTopic(),GROUP));
       if (retryPolicy.getSeconds().longValue() >= MAX_PROCESS_TIME_SECONDS) {
         newRetryConsumer.getProperties().put(SESSION_TIMEOUT_MS, DEFAULT_SESSION_TIMEOUT_MS);
