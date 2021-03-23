@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -56,7 +57,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class KafkaService {
 
-  protected ExecutorService producerThreadPool = ThreadPoolUtil.newCachedLimitedThreadPool(PRODUCER_POOL);
+  @Getter
+  protected ExecutorService producerThreadPool;
   
   @Getter
   @Setter
@@ -66,7 +68,7 @@ public class KafkaService {
   
   @Getter
   protected Map<String, KafkaConsumerConfig<?,?>> topicKafkaConsumerConfigMap = new HashMap<>();
-
+  @Getter
   protected Map<String, KafkaProducerConfig<?,?>> topicKafkaProducerConfigMap = new HashMap<>();
 
   @Getter
@@ -90,6 +92,17 @@ public class KafkaService {
     ReadConfigurationStep readConfigurationService =
         new ReadConfigurationStep(this, preValidationStep);
     readConfigurationService.execute();
+    OptionalInt maxThreadCount = kafkaServiceConfig.getProducers().values().stream().filter(kp->kp.getMaximumThreadCount()!=null).mapToInt(kp->kp.getMaximumThreadCount()).max();
+    OptionalInt queueSize = kafkaServiceConfig.getProducers().values().stream().filter(kp->kp.getQueueSize()!=null).mapToInt(kp->kp.getQueueSize()).max();
+    if(maxThreadCount.isPresent()) {
+      if(queueSize.isPresent()) {
+        producerThreadPool = ThreadPoolUtil.newCachedLimitedThreadPool(PRODUCER_POOL,maxThreadCount.getAsInt(),queueSize.getAsInt());
+      }else {
+        producerThreadPool = ThreadPoolUtil.newCachedLimitedThreadPool(PRODUCER_POOL,maxThreadCount.getAsInt());
+      }
+    }else {
+      producerThreadPool = ThreadPoolUtil.newCachedLimitedThreadPool(PRODUCER_POOL);
+    }
   }
 
   /**
@@ -317,14 +330,19 @@ public class KafkaService {
     executorService.shutdown();
   }
   
-  protected void close(long timeout) {
-    log.info("Closing producer executor service now..");
-    GracefulShutdownStep.shutdownAndAwaitTermination(producerThreadPool);
-    topicKafkaProducerConfigMap.values().forEach(producerConfig->{
-      log.info("Flushing final transactions for producer topic {}",producerConfig.getTopic());
-      getProducerByTopic(producerConfig.getTopic()).flush();
-      getProducerByTopic(producerConfig.getTopic()).close(Duration.ofMillis(timeout));
-    });
-  }
+//  protected void close(long timeout) {
+//    log.info("Closing producer executor service now..");
+//    GracefulShutdownStep.shutdownAndAwaitTermination(producerThreadPool);
+////    for(KafkaProducerConfig producerConfig:topicKafkaProducerConfigMap.values()) {
+////      log.info("Flushing final transactions for producer topic {}",producerConfig.getTopic());
+////      getProducerByTopic(producerConfig.getTopic()).flush();
+////      getProducerByTopic(producerConfig.getTopic()).close(Duration.ofMillis(timeout));
+////    }
+////    topicKafkaProducerConfigMap.values().forEach(producerConfig->{
+////      log.info("Flushing final transactions for producer topic {}",producerConfig.getTopic());
+////      getProducerByTopic(producerConfig.getTopic()).flush();
+////      getProducerByTopic(producerConfig.getTopic()).close(Duration.ofMillis(timeout));
+////    });
+//  }
   
 }

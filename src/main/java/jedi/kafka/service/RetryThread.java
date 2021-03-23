@@ -27,26 +27,28 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class RetryThread extends ConsumerThread  {
-
+  
   @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   public void run() {
     String topic = getConsumerConfig().getTopic();
     Consumer<?,?> consumer = getKafkaConsumer();
+    List<Future<?>> futures = null;
+    ConsumerRecords records = null;
+    Iterator<ConsumerRecord<?,?>> iterator = null;
+    ConsumerRecord<?,?> record = null;
+    Duration retryDuration = getDuration();
+    KafkaMessage<?> lastProcessedMessage = null;
     try {
       consumer.subscribe(Collections.singleton(topic));
       log.info("Topic {} subscription completed", topic);
-      Iterator<ConsumerRecord<?,?>> iterator = null;
-      KafkaMessage<?> lastProcessedMessage = null;
-      ConsumerRecord<?,?> record = null;
-      Duration retryDuration = getDuration();
-      List<Future<?>> futures = null;
-      ConsumerRecords records = null;
-      while (!isShutDownInProgress()) {
+      while (!isShutDownInProgress.get()) {
         if(!retryDuration.equals(getDuration())) {
           log.debug("Polling duration {}",retryDuration);
         }
+        isPolling.set(true);
         records = poll(retryDuration);
+        isPolling.set(false);
         if(!consumerPaused.get()){
           iterator = records.iterator();
           futures = new ArrayList<>();
@@ -60,6 +62,11 @@ public class RetryThread extends ConsumerThread  {
           if (remainingTime <= EXECUTION_TIME_BUFFER) {
             retryDuration = executeRecord(iterator, lastProcessedMessage, record, retryDuration, futures);
             lastProcessedMessage  = null;
+            record = null;
+            if(retryDuration==null) {
+              //we r closing..
+              break;
+            }
           }else {
             retryDuration = Duration.ofMillis(remainingTime);
             pauseConsumer(record,lastProcessedMessage.getUniqueId());
@@ -72,6 +79,10 @@ public class RetryThread extends ConsumerThread  {
     } catch (Exception e) {
       log.warn("Ignoring Exception for shutdown. RetyThread {}", e.getMessage());
     } finally {
+      if(consumerPaused.get()) {
+        log.info("Consumer is paused. executing/reproducing remaining records now..");
+        executeRecord(iterator, lastProcessedMessage, record, retryDuration, futures);
+      }
       String partitions = consumer.assignment().toString();
       log.info("Closing consumer topic {} partition(s) {}", topic,partitions);
       consumer.close();
@@ -79,7 +90,6 @@ public class RetryThread extends ConsumerThread  {
       log.info("Closing retry consumer executor services for topic {} partitions(s) {}",topic,partitions);
       GracefulShutdownStep.shutdownAndAwaitTermination(getExecutorService());
       log.info("Closed consumer executor services for topic {} partition(s)  {}", topic,partitions);
-      countDownLatch.countDown();
       log.info("Shutdown complete for topic {} partition(s)  {}",topic,partitions);
     }
   }
@@ -87,34 +97,61 @@ public class RetryThread extends ConsumerThread  {
   private Duration executeRecord(Iterator<ConsumerRecord<?,?>> iterator,
       KafkaMessage<?> lastProcessedMessage, ConsumerRecord<?,?> record,
       Duration retryDuration, List<Future<?>> futures) {
-    log.debug("Retrying message {} for partition {}",lastProcessedMessage.getUniqueId(),record.partition());
-    Duration newDuration  = retryDuration;
-    Future<?> future = handleRecord(record);
-    futures.add(future);
-    if(isShutDownInProgress()) {
-      String topic = getConsumerConfig().getTopic();
-      log.info("Trying to reproduce any records remaining for topic {}",topic);
-      int remainingItemsInBatch = 0;
-      ConsumerRecord<?,?> remainingRecord = null;
-      while(Objects.nonNull(iterator) && iterator.hasNext()) {
-        remainingRecord = iterator.next();
-        KafkaMessage<?> kafkaMessage = getKafkaMessage(remainingRecord);
-        ProducerRecord<?,?> producerRecord = getKafkaService().createProducerRecord(topic,(Serializable)kafkaMessage.getMessage());
-        producerRecord.headers().add(UNQUE_ID,SerializationUtils.serialize(kafkaMessage.getUniqueId()));
-        producerRecord.headers().add(RETRY_COUNTER, SerializationUtils.serialize(kafkaMessage.getRetryCounter()));
-        producerRecord.headers().add(NEXT_RETRY_TIMESTAMP, SerializationUtils.serialize(kafkaMessage.getNextRetryTimestamp()));
-        getKafkaService().sendAsync(getConsumerConfig().getTopic(),producerRecord);
-        remainingItemsInBatch++;
+    Duration newDuration = null;
+    if(isShutDownInProgress.get()) {
+      //We r closing..
+      //check if no record processed in this batch,then do nothing
+      if(futures.size()==0) {
+        return null;
+      }else {
+        String topic = getConsumerConfig().getTopic();
+        log.info("Trying to reproduce any records remaining for topic {}",topic);
+        int remainingItemsInBatch = 0;
+        //reproduce current record and then remaining records..
+        if(Objects.nonNull(record)) {
+          reproduceMessage(topic, record);
+          remainingItemsInBatch++;
+        }
+        ConsumerRecord<?,?> remainingRecord = null;
+        while(Objects.nonNull(iterator) && iterator.hasNext()) {
+          remainingRecord = iterator.next();
+          reproduceMessage(topic, remainingRecord);
+          remainingItemsInBatch++;
+        }
+        log.info("Reproduced {} items in retry batch for topic {}",remainingItemsInBatch,topic);
+        resumeConsumer();
+        commit();
+        futures.clear();
+        return null;
       }
-      log.info("Reproduced {} items in retry batch to topic {}",remainingItemsInBatch,topic);
+    }else {
+      log.info("Retrying message {} for partition {}",lastProcessedMessage.getUniqueId(),record.partition());
+      newDuration  = retryDuration;
+      Future<?> future = handleRecord(record);
+      futures.add(future);
     }
-    if(!iterator.hasNext()) {
-      waitClientResponse(futures);
-      log.debug("Resetting retry duration to {} after last record {}",getDuration(),lastProcessedMessage.getUniqueId());
+    if(Objects.nonNull(iterator) && !iterator.hasNext()) {
+      if(Objects.nonNull(futures)) {
+        waitClientResponse(futures);
+      }
+      if(Objects.isNull(lastProcessedMessage)) {
+        log.debug("Resetting retry duration to {}",getDuration());
+      }else {
+        log.debug("Resetting retry duration to {} after last record {}",getDuration(),lastProcessedMessage.getUniqueId());
+      }
       newDuration = getDuration();
       resumeConsumer();
       commit();
     }
     return newDuration;
+  }
+
+  private void reproduceMessage(String topic, ConsumerRecord<?, ?> remainingRecord) {
+    KafkaMessage<?> kafkaMessage = getKafkaMessage(remainingRecord);
+    ProducerRecord<?,?> producerRecord = getKafkaService().createProducerRecord(topic,(Serializable)kafkaMessage.getMessage());
+    producerRecord.headers().add(UNQUE_ID,SerializationUtils.serialize(kafkaMessage.getUniqueId()));
+    producerRecord.headers().add(RETRY_COUNTER, SerializationUtils.serialize(kafkaMessage.getRetryCounter()));
+    producerRecord.headers().add(NEXT_RETRY_TIMESTAMP, SerializationUtils.serialize(kafkaMessage.getNextRetryTimestamp()));
+    getKafkaService().sendAsync(getConsumerConfig().getTopic(),producerRecord);
   }
 }

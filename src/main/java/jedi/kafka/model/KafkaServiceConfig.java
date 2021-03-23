@@ -41,6 +41,12 @@ public class KafkaServiceConfig {
   @NoArgsConstructor
   public class KafkaProducerConfig<K,V> extends KafkaConfig {
     private KafkaProducer<String,?> kafkaProducer;
+    
+    @Expose
+    private Integer maximumThreadCount;
+    
+    @Expose
+    private Integer queueSize;
 
     public KafkaProducerConfig(KafkaProducerConfig<K,V> kafkaProducerConfig) {
       Map<String, Object> newProperties = new HashMap<>();

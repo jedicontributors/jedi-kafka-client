@@ -38,6 +38,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 
 import jedi.kafka.model.KafkaMessage;
@@ -58,8 +59,9 @@ public class ConsumerThread extends Thread {
   protected final AtomicBoolean consumerPaused = new AtomicBoolean(false);
   protected long lastPollTime = 0;
   protected Collection<TopicPartition> assignedPartitions = new HashSet<>();
-  protected CountDownLatch countDownLatch;
-  
+  protected AtomicBoolean isPolling = new AtomicBoolean(false);
+  protected AtomicBoolean isShutDownInProgress = new AtomicBoolean(false);
+  protected ConsumerRecords<?,?> records = null;
   private long maxProcessTime;
   private KafkaService kafkaService;
   private KafkaConsumerConfig<?,?> consumerConfig;
@@ -69,7 +71,6 @@ public class ConsumerThread extends Thread {
   private boolean isRetryable;
   private ExecutorService  executorService;
   private Consumer<?,?> kafkaConsumer;
-  private boolean isShutDownInProgress;
   private RebalanceListener rebalanceListener;
   
   @Override
@@ -78,10 +79,12 @@ public class ConsumerThread extends Thread {
     try {
       kafkaConsumer.subscribe(Collections.singleton(topic));
       log.info("Topic {} subscription completed",topic);
-      ConsumerRecords<?,?> records = null;
       if(handler.isBulkConsumer()) {
-        while (!isShutDownInProgress) {
+        while (!isShutDownInProgress.get()) {
+          isPolling.set(true);
+          records = null;
           records = poll(duration);
+          isPolling.set(false);
           if(!records.isEmpty()) {
             consumeBulk(records);
             resumeConsumer();
@@ -89,8 +92,11 @@ public class ConsumerThread extends Thread {
           }
         }
       }else {
-        while (!isShutDownInProgress) {
+        while (!isShutDownInProgress.get()) {
+          isPolling.set(true);
+          records = null;
           records = poll(duration);
+          isPolling.set(false);
           if(!records.isEmpty()) {
             consume(records);
             resumeConsumer();
@@ -98,6 +104,8 @@ public class ConsumerThread extends Thread {
           }
         }
       }
+    } catch(WakeupException ex){
+      log.warn("Consumer waked up for topic {} partitions {}",getConsumerConfig().getTopic(),kafkaConsumer.assignment());
     } catch(Exception ex){
         log.error("Exception in ConsumerThread ",ex);  
     } finally {
@@ -108,7 +116,6 @@ public class ConsumerThread extends Thread {
       log.info("Closing consumer executor services for topic {} partitions(s) {}",topic,partitions);
       GracefulShutdownStep.shutdownAndAwaitTermination(executorService);
       log.info("Closed consumer executor services for topic {} partition(s) {}",topic,partitions);
-      countDownLatch.countDown();
       log.info("Shutdown complete for topic {} partition(s) {}",topic,partitions);
     }
   }
@@ -221,14 +228,17 @@ public class ConsumerThread extends Thread {
   
   protected void shutdown(CountDownLatch countDownLatch) {
     log.info("Shutdown request recieved for consumer -> {}",this.getName());
-    this.countDownLatch = countDownLatch;
-    this.isShutDownInProgress=true;
+    this.isShutDownInProgress.set(true);
+    if(isPolling.get() && (records==null || records.isEmpty())) {
+      kafkaConsumer.wakeup();
+    }
+    countDownLatch.countDown();
   }
   
-  protected void close() {
-    log.info("Closing consumer topic -> {}",consumerConfig.getTopic());
-    kafkaConsumer.close();
-  }
+//  protected void close() {
+//    log.info("Closing consumer topic -> {}",consumerConfig.getTopic());
+//    kafkaConsumer.close();
+//  }
 
   protected void initialize(KafkaService kafkaService,ConsumerThread consumerThread,KafkaConsumerConfig<?,?> consumerConfig,ConsumerHandler<?> consumerHandler,
       Duration duration,String threadName,long maxProcessTime) {
