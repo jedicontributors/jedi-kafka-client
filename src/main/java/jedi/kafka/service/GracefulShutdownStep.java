@@ -2,6 +2,8 @@ package jedi.kafka.service;
 
 import static jedi.kafka.model.KafkaConstants.KAFKA_SERVICE;
 import static jedi.kafka.model.KafkaConstants.DEFAULT_MAX_PROCESS_TIME;
+
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -9,6 +11,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+
+import jedi.kafka.model.KafkaServiceConfig.KafkaProducerConfig;
 import jedi.kafka.model.Step;
 import jedi.kafka.model.StepDetails;
 import jedi.kafka.util.ThreadPoolUtil;
@@ -45,11 +50,34 @@ public class GracefulShutdownStep extends Step {
           for(Future<?> fut:futures) {
             fut.get(DEFAULT_MAX_PROCESS_TIME,TimeUnit.MILLISECONDS);
           }
+          try {
+            Thread.sleep(5000);
+          } catch (InterruptedException e) {
+            log.error("",e);
+          }
+          shutdownAndAwaitTermination(kafkaService.getProducerThreadPool());
+          try {
+            Thread.sleep(3000);
+          } catch (InterruptedException e) {
+            log.error("",e);
+          }
           long remainingTime = DEFAULT_MAX_PROCESS_TIME-(System.currentTimeMillis()-startTime);
           if(remainingTime<3000) {
             remainingTime = 3000;
           }
-          kafkaService.close(remainingTime);
+          futures.clear();
+          for(KafkaProducerConfig<?,?> pc:kafkaService.getTopicKafkaProducerConfigMap().values()) {
+            KafkaProducer<?,?> producer = kafkaService.getTopicKafkaProducerConfigMap().get(pc.getTopic()).getKafkaProducer();
+            long timeout = remainingTime;
+            futures.add(es.submit(()->{
+              log.info("Flushing final transactions for producer topic {}",pc.getTopic());
+              producer.flush();
+              producer.close(Duration.ofMillis(timeout));
+            }));
+          }
+          for(Future<?> fut:futures) {
+            fut.get(remainingTime,TimeUnit.MILLISECONDS);
+          }
           log.info("Producer(s) closed");
         } catch (InterruptedException e) {
           log.error("Interrupt on waiting countdown ",e);

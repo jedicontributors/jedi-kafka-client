@@ -1,6 +1,8 @@
 {
 	"producers": {
 		"testObjectProducer": {
+			"maximumThreadCount": 10,
+			"queueSize": 100,
 			"topic": "test-object-topic",
 			"properties": {
 				"bootstrap.servers": "0.0.0.0:9092"
