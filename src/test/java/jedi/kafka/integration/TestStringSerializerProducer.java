@@ -6,7 +6,7 @@ import jedi.kafka.model.ExternalProducer;
 import jedi.kafka.model.TestByteArrayConsumer;
 import jedi.kafka.service.JediKafkaClient;
 
-public class TestByteArraySerializerProducer {
+public class TestStringSerializerProducer {
 
   private static final String TEST_TOPIC = "test-byteArr-consumer";
 
@@ -21,7 +21,7 @@ public class TestByteArraySerializerProducer {
     ExternalProducer producer = new ExternalProducer(TEST_TOPIC,"0.0.0.0:9092",ByteArraySerializer.class.getName());
     producer.start();
     Thread.currentThread().join(WAIT_10000);
-//    System.exit(0);
+    System.exit(0);
   }
   
   

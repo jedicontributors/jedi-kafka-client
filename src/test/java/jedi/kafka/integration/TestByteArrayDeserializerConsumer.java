@@ -2,6 +2,7 @@ package jedi.kafka.integration;
 
 import java.util.stream.IntStream;
 
+import org.apache.commons.lang3.SerializationUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import jedi.kafka.model.ExternalConsumer;
@@ -21,7 +22,7 @@ public class TestByteArrayDeserializerConsumer {
     Thread.currentThread().join(WAIT_10000);
     JediKafkaClient jediKafkaClient  = JediKafkaClient.getInstance(TEST_KAFKA_CONFIG_FILE_NAME);
     IntStream.range(0, 10).forEach(item->{
-      jediKafkaClient.sendSync(TEST_TOPIC, String.valueOf(item));
+      jediKafkaClient.sendSync(TEST_TOPIC, SerializationUtils.serialize(String.valueOf(item)));
     });
     Thread.currentThread().join(WAIT_10000);
     consumer.close();

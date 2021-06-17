@@ -165,10 +165,10 @@ public class ConstructionStep extends Step {
       kafkaService.topicKafkaProducerConfigMap.computeIfAbsent(kp.getTopic(), key -> {
         Map<String, Object> props = kp.getProperties();
         props.computeIfAbsent(KEY_SERIALIZER, keySerializer -> STRING_SERIALIZER);
-        props.computeIfAbsent(VALUE_SERIALIZER, valueSerializer -> BYTE_ARRAY_SERIALIZER);
-        if(props.get(VALUE_SERIALIZER).equals(BYTE_ARRAY_SERIALIZER)) {
-          kp.setValueSerDesByteArray(true);
+        if(Objects.nonNull(props.get(VALUE_SERIALIZER))) {
+          kp.setSerDesDefined(true);
         }
+        props.computeIfAbsent(VALUE_SERIALIZER, valueSerializer -> BYTE_ARRAY_SERIALIZER);
         props.computeIfAbsent(RECONNECT_BACKOFF_MS, backOffMs -> DEFAULT_RECONNECT_BACKOFF_MS);
         props.computeIfAbsent(RECONNECT_BACKOFF_MAX_MS, backOffMax -> DEFAULT_RECONNECT_BACKOFF_MAX_MS);
         log.info("Creating producer for topic {}", kp.getTopic());
@@ -182,8 +182,8 @@ public class ConstructionStep extends Step {
       kafkaService.topicKafkaConsumerConfigMap.computeIfAbsent(kcc.getTopic(), key -> {
         Map<String, Object> props = kcc.getProperties();
         props.computeIfAbsent(KEY_DESERIALIZER, keySerializer -> STRING_DESERIALIZER); 
-        if(Objects.nonNull(props.get(VALUE_DESERIALIZER)) && props.get(VALUE_DESERIALIZER).equals(BYTE_ARRAY_DESERIALIZER)) {
-          kcc.setValueSerDesByteArray(true);
+        if(Objects.nonNull(props.get(VALUE_DESERIALIZER))) {
+          kcc.setSerDesDefined(true);
         }
         props.computeIfAbsent(VALUE_DESERIALIZER, keyDeserializer -> BYTE_ARRAY_DESERIALIZER);
         props.computeIfAbsent(ENABLE_AUTO_COMMIT, autoCommit -> String.valueOf(Boolean.FALSE));

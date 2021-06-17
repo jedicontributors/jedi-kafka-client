@@ -8,7 +8,7 @@ public class FailingConsumer implements ConsumerHandler<String> {
 
   @Override
   public Response onMessage(String message) {
-    log.debug("Recieved message {}",message);
+    log.info("Recieved message {}",message);
 //    try {
 //      Thread.currentThread().join(3000L);
 //    } catch (InterruptedException e) {

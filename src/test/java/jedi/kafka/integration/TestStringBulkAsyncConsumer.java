@@ -21,8 +21,6 @@ public class TestStringBulkAsyncConsumer {
     IntStream.range(0, 10).forEach(item->{
       jediKafkaClient.sendAsync(OBJECT_TOPIC, String.valueOf(item));
     });
-    Thread.currentThread().join(WAIT_10000);
-    System.exit(0);
   }
 
 }
