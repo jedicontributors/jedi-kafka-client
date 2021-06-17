@@ -22,7 +22,5 @@ public class TestSerializableObjectSyncConsumer {
     IntStream.range(0, 10).forEach(item->{
       jediKafkaClient.sendSync(OBJECT_TOPIC, new AnySerializableObject(String.valueOf(item)));
     });
-    Thread.currentThread().join(WAIT_10000);
-    System.exit(0);
   }
 }

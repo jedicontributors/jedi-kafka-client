@@ -254,7 +254,8 @@ public class ConsumerThread extends Thread {
   }
   
   private Object getMessage(ConsumerRecord<?,?> record) {
-    return consumerConfig.isValueSerDesByteArray()?record.value():SerializationUtils.deserialize((byte[])record.value());
+    log.debug("Record.value is {}",record.value());
+    return consumerConfig.isSerDesDefined()?record.value():SerializationUtils.deserialize((byte[])record.value());
   }
 
   protected KafkaMessage<?> getKafkaMessage(ConsumerRecord<?,?> record) {

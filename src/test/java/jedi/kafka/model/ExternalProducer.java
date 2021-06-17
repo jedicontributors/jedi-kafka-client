@@ -40,15 +40,31 @@ public class ExternalProducer extends Thread{
     properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
     properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,serializerClassName);
     producer = new KafkaProducer<>(properties);
+    while(true) {
     IntStream.range(0, 10).forEach(item->{
       producerThreadPool.submit(()->{
       if(ByteArraySerializer.class.getName().equals(serializerClassName)) {
-        producer.send(new ProducerRecord(topic, SerializationUtils.serialize(item)));
+        producer.send(new ProducerRecord(topic, SerializationUtils.serialize(String.valueOf(item))));
       }else {
-        producer.send(new ProducerRecord(topic, item));
+        System.out.println("sending item "+item);
+        producer.send(new ProducerRecord(topic, String.valueOf(item)));
       }
       });
     });
+    try {
+      Thread.sleep(5000L);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+    }
   }
+  
+  
+  public static void main(String[] args) {
+    ExternalProducer producer = new ExternalProducer("test-string","localhost:9092","org.apache.kafka.common.serialization.StringSerializer");
+    producer.run();
+  }
+  
+  
   
 }

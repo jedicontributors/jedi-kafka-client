@@ -1,5 +1,6 @@
 package jedi.kafka.model;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import jedi.kafka.service.ConsumerHandler;
@@ -9,7 +10,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class StringConsumer implements ConsumerHandler<String> {
+public class StringBulkConsumer implements ConsumerHandler<List<String>> {
   
   @Getter
   private AtomicLong counter = new AtomicLong();
@@ -17,14 +18,18 @@ public class StringConsumer implements ConsumerHandler<String> {
   private Response response;
   
   @Override
-  public Response onMessage(String message) {
+  public Response onMessage(List<String> message) {
     log.debug(counter.incrementAndGet()+"-Recieved message "+message);
     return response;
   }
   
   public static void main(String[] args) {
     JediKafkaClient kafkaClient = JediKafkaClient.getInstance("test-string-deserializer-consumer.json");
-    kafkaClient.registerConsumer("test-string", new StringConsumer());
+    kafkaClient.registerConsumer("test-string", new StringBulkConsumer());
   }
   
+  @Override
+  public  boolean isBulkConsumer() {
+    return true;
+  }
 }

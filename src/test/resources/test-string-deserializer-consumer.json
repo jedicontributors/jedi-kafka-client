@@ -1,0 +1,12 @@
+{
+	"consumers": {
+		"testConsumer": {
+			"topic": "test-string",
+			 "isValueSerDesByteArray": "true",
+			"properties": {
+				"bootstrap.servers": "0.0.0.0:9092",
+				"value.deserializer": "org.apache.kafka.common.serialization.StringDeserializer"
+			}
+		}
+	}
+}

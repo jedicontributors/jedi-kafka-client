@@ -240,7 +240,7 @@ public class KafkaService {
   
   protected ProducerRecord<?,?> createProducerRecord(String topic,Object message){
     KafkaProducerConfig config = topicKafkaProducerConfigMap.get(topic);
-    if(config.isValueSerDesByteArray()) {
+    if(!config.isSerDesDefined()) {
       return new ProducerRecord(topic,SerializationUtils.serialize((Serializable)message));
     }
     return new ProducerRecord(topic, message);

@@ -1,7 +1,7 @@
 {
 	"producers": {
 		"testProducer": {
-			"topic": "test-failing",
+			"topic": "test-retry",
 			"properties": {
 				"bootstrap.servers": "0.0.0.0:9092"
 			}
@@ -9,14 +9,14 @@
 	},
 	"consumers": {
 	 	"testConsumer": {
-			"topic": "test-failing",
+			"topic": "test-retry",
 			"properties": {
 				"bootstrap.servers": "0.0.0.0:9092"
 			},
 			"maxRetryCount": 2,
 			"retryPolicys": {
 			    "retry5": {
-			     "retryTopic": "test-failing-retry",	
+			     "retryTopic": "test-retry-5",	
 			     "errorCode": "-1,-2,-3",
 			     "seconds": "5"
 			    }

@@ -32,7 +32,7 @@ public class KafkaServiceConfig {
     @Expose
     private Map<String, Object> properties;
     
-    private boolean isValueSerDesByteArray;
+    protected boolean isSerDesDefined;
     
   }
 
